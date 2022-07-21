@@ -14,4 +14,11 @@ CHIP Xor {
 
     PARTS:
     // Put your code here:
+    Not(in=a,out=Nota);
+    Not(in=b,out=Notb);
+    Or(a=Nota,b=b,out=bNota);
+    Or(a=a,b=Notb,out=aNotb);
+    Nand(a=bNota,b=aNotb,out=out);
+
+
 }
