@@ -1,0 +1,112 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+/**
+ * The Hack CPU (Central Processing unit), consisting of an ALU,
+ * two registers named A and D, and a program counter named PC.
+ * The CPU is designed to fetch and execute instructions written in 
+ * the Hack machine language. In particular, functions as follows:
+ * Executes the inputted instruction according to the Hack machine 
+ * language specification. The D and A in the language specification
+ * refer to CPU-resident registers, while M refers to the external
+ * memory location addressed by A, i.e. to Memory[A]. The inM input 
+ * holds the value of this location. If the current instruction needs 
+ * to write a value to M, the value is placed in outM, the address 
+ * of the target location is placed in the addressM output, and the 
+ * writeM control bit is asserted. (When writeM==0, any value may 
+ * appear in outM). The outM and writeM outputs are combinational: 
+ * they are affected instantaneously by the execution of the current 
+ * instruction. The addressM and pc outputs are clocked: although they 
+ * are affected by the execution of the current instruction, they commit 
+ * to their new values only in the next time step. If reset==1 then the 
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
+ * than to the address resulting from executing the current instruction. 
+ */
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+    // Put your code here:
+    
+    //control bits
+    And(a=instruction[15],b=instruction[0],out=jump1);
+    And(a=instruction[15],b=instruction[1],out=jump2);
+    And(a=instruction[15],b=instruction[2],out=jump3);
+    And(a=instruction[15],b=instruction[3],out=dest1,out=writeM);
+    And(a=instruction[15],b=instruction[4],out=dest2);
+    And(a=instruction[15],b=instruction[5],out=dest3);
+    And(a=instruction[15],b=instruction[6],out=comp1);
+    And(a=instruction[15],b=instruction[7],out=comp2);
+    And(a=instruction[15],b=instruction[8],out=comp3);
+    And(a=instruction[15],b=instruction[9],out=comp4);
+    And(a=instruction[15],b=instruction[10],out=comp5);
+    And(a=instruction[15],b=instruction[11],out=comp6);
+    And(a=instruction[15],b=instruction[12],out=a1);
+
+    //A register get input from instruction if instruction[15]=0 or from ALU output if instruction[15]=1 and instruction[5]=1
+    Mux16(a=instruction,b=aluout,sel=instruction[15],out=aregistertemp);
+
+    //control bit must equal to 1 to pass the result to A register
+    Not(in=instruction[15],out=notinstruction);
+    Or(a=notinstruction,b=dest3,out=Aload);
+    ARegister(in=aregistertemp,load=Aload,out=A,out[0..14]=addressM);
+
+    //if instruction[12]=1,mux16 will get result from inM
+    Mux16(a=A,b=inM,sel=a1,out=instructionout);
+    ALU(x=dregister,y=instructionout,zx=comp6,nx=comp5,zy=comp4,ny=comp3,f=comp2,no=comp1,out=aluout,out=outM,zr=zr,ng=ng);
+    
+    //D gate will accept value from ALU if instruction[4]=1
+    DRegister(in=aluout,load=dest2,out=D,out=dregister);
+
+    //jump control bit check
+    //JMP
+    And(a=jump1,b=jump2,out=jump1andjump2);
+    And(a=jump3,b=jump1andjump2,out=JMPjump);
+
+    //JGT
+    Not(in=ng,out=notng);
+    Not(in=zr,out=notzr);
+    And(a=notng,b=notzr,out=positive);
+    And(a=jump1,b=positive,out=JGTjump);
+
+    //JEQ
+    And(a=jump2,b=zr,out=JEQjump);
+
+    //JGE
+    And(a=jump1andjump2,b=notng,out=JGEjump);
+
+    //JLT
+    And(a=jump3,b=ng,out=JLTjump);
+
+    //JNE
+    And(a=jump1,b=jump3,out=jump1andjump3);
+    And(a=jump1andjump3,b=notzr,out=JNEjump);
+
+    //JLE
+    And(a=jump2,b=jump3,out=jump2andjump3);
+    And(a=jump2andjump3,b=ng,out=JLEjump);
+
+    //combine all possible jump together
+    Or(a=JMPjump,b=JGTjump,out=load1);
+    Or(a=JEQjump,b=JGEjump,out=load2);
+    Or(a=JLTjump,b=JNEjump,out=load3);
+    Or(a=load1,b=load2,out=load4);
+    Or(a=load3,b=JLEjump,out=load5);
+    Or(a=load4,b=load5,out=pcjump);
+
+    //jump control bit =1 if there is a jump
+    PC(in=A,load=pcjump,inc=true,reset=reset,out[0..14]=pc);
+}
